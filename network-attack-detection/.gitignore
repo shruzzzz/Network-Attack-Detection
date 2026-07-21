@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Model artifacts (regenerate via train_model.py; can be large)
+model_artifacts/*.pkl
+model_artifacts/metrics.json
+
+# Data (regenerate via generate_sample_data.py, or drop in your own CIC-IDS-2018 CSVs)
+data/*.csv
+!data/.gitkeep
+
+# OS / editor
+.DS_Store
+.vscode/
+*.swp
+
+# Jupyter
+.ipynb_checkpoints/

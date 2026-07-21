@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flowline — Network Attack Detection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg: #10141b;
+    --panel: #171d27;
+    --panel-alt: #1c2431;
+    --border: #2a3444;
+    --text: #e7ecf3;
+    --text-dim: #8994a6;
+    --text-faint: #5c6779;
+    --signal: #35d9a0;
+    --signal-dim: rgba(53,217,160,0.14);
+    --alert: #ff6b5e;
+    --alert-dim: rgba(255,107,94,0.14);
+    --warn: #ffb84d;
+    --accent-line: #3d8bff;
+    --radius: 10px;
+    --mono: 'IBM Plex Mono', monospace;
+    --display: 'Space Grotesk', sans-serif;
+    --body: 'Inter', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--body); -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit;}
+
+  /* ---------- Top bar ---------- */
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 28px; border-bottom:1px solid var(--border);
+    position:sticky; top:0; background:rgba(16,20,27,0.92); backdrop-filter:blur(6px); z-index:20;
+  }
+  .brand{display:flex; align-items:center; gap:12px;}
+  .brand-mark{
+    width:34px; height:34px; border-radius:8px;
+    background: linear-gradient(155deg, var(--signal), var(--accent-line));
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-weight:600; color:#0b0f14; font-size:15px;
+  }
+  .brand-name{font-family:var(--display); font-weight:700; font-size:18px; letter-spacing:0.2px;}
+  .brand-sub{font-size:11px; color:var(--text-faint); font-family:var(--mono); letter-spacing:0.4px; text-transform:uppercase;}
+  .status-pill{
+    display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:12px;
+    color:var(--text-dim); border:1px solid var(--border); padding:6px 12px; border-radius:20px;
+  }
+  .dot{width:8px; height:8px; border-radius:50%; background:var(--text-faint);}
+  .dot.live{background:var(--signal); box-shadow:0 0 0 0 var(--signal-dim); animation: pulse 1.8s infinite;}
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(53,217,160,0.5);}
+    70%{box-shadow:0 0 0 8px rgba(53,217,160,0);}
+    100%{box-shadow:0 0 0 0 rgba(53,217,160,0);}
+  }
+
+  main{max-width:1320px; margin:0 auto; padding:28px;}
+
+  .eyebrow{font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:1.2px; color:var(--text-faint); margin-bottom:6px;}
+  h1{font-family:var(--display); font-size:26px; margin:0 0 4px 0; font-weight:700;}
+  h2{font-family:var(--display); font-size:16px; margin:0; font-weight:600;}
+  p.lead{color:var(--text-dim); max-width:640px; font-size:14px; line-height:1.6; margin:8px 0 28px;}
+
+  /* ---------- Approach selector ---------- */
+  .approach-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:28px;}
+  .approach-card{
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
+    padding:18px; cursor:pointer; transition:border-color .15s, transform .15s;
+    position:relative; overflow:hidden;
+  }
+  .approach-card:hover{border-color:#3a4658; transform:translateY(-1px);}
+  .approach-card.selected{border-color:var(--signal); box-shadow:0 0 0 1px var(--signal) inset;}
+  .approach-card .badge{
+    display:inline-block; font-family:var(--mono); font-size:10px; text-transform:uppercase;
+    letter-spacing:0.6px; padding:3px 8px; border-radius:20px; background:var(--panel-alt); color:var(--text-dim);
+    margin-bottom:10px;
+  }
+  .approach-card h3{font-family:var(--display); font-size:15px; margin:0 0 6px;}
+  .approach-card .desc{font-size:12px; color:var(--text-dim); line-height:1.5; min-height:48px;}
+  .approach-card .stat-row{display:flex; gap:18px; margin-top:14px; font-family:var(--mono);}
+  .approach-card .stat-row div span{display:block; font-size:18px; color:var(--text); font-weight:600;}
+  .approach-card .stat-row div small{font-size:10px; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.4px;}
+
+  /* ---------- Panel grid ---------- */
+  .grid-2{display:grid; grid-template-columns:1.3fr 1fr; gap:16px; margin-bottom:16px;}
+  .panel{
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:20px;
+  }
+  .panel-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;}
+
+  table.perclass{width:100%; border-collapse:collapse; font-size:12.5px;}
+  table.perclass th{
+    text-align:left; font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.5px;
+    color:var(--text-faint); padding:6px 8px; border-bottom:1px solid var(--border);
+  }
+  table.perclass td{padding:7px 8px; border-bottom:1px solid #1e2530; font-family:var(--mono);}
+  table.perclass tr:hover td{background:#1b222d;}
+  .bar-track{width:80px; height:6px; background:#232b38; border-radius:4px; overflow:hidden; display:inline-block; vertical-align:middle; margin-right:6px;}
+  .bar-fill{height:100%; background:var(--signal); border-radius:4px;}
+  .bar-fill.low{background:var(--alert);}
+  .bar-fill.mid{background:var(--warn);}
+
+  /* ---------- Upload / inference ---------- */
+  .dropzone{
+    border:1.5px dashed var(--border); border-radius:var(--radius); padding:26px; text-align:center;
+    color:var(--text-dim); font-size:13px; cursor:pointer; transition:border-color .15s, background .15s;
+  }
+  .dropzone:hover{border-color:var(--signal); background:var(--signal-dim);}
+  .dropzone input{display:none;}
+  .btn{
+    background:var(--signal); color:#08130f; border:none; padding:9px 16px; border-radius:8px;
+    font-family:var(--body); font-weight:600; font-size:13px; cursor:pointer; transition:opacity .15s;
+  }
+  .btn:hover{opacity:0.88;}
+  .btn.secondary{background:transparent; border:1px solid var(--border); color:var(--text);}
+  .btn.danger{background:var(--alert); color:#2a0906;}
+  .btn:disabled{opacity:0.4; cursor:not-allowed;}
+
+  .summary-cards{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:16px 0;}
+  .summary-card{background:var(--panel-alt); border:1px solid var(--border); border-radius:8px; padding:14px;}
+  .summary-card .num{font-family:var(--mono); font-size:22px; font-weight:600;}
+  .summary-card .label{font-size:11px; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.4px; margin-top:4px;}
+  .summary-card.attack .num{color:var(--alert);}
+  .summary-card.benign .num{color:var(--signal);}
+
+  canvas{max-height:260px;}
+
+  /* ---------- Live capture ---------- */
+  .live-controls{display:flex; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap;}
+  select, input[type=text]{
+    background:var(--panel-alt); border:1px solid var(--border); color:var(--text);
+    padding:8px 10px; border-radius:8px; font-family:var(--mono); font-size:12px;
+  }
+  .flow-log{max-height:340px; overflow-y:auto; font-family:var(--mono); font-size:12px;}
+  .flow-row{
+    display:grid; grid-template-columns:90px 70px 1fr 90px 70px; gap:10px; padding:8px 6px;
+    border-bottom:1px solid #1e2530; align-items:center; animation:slideIn .3s ease;
+  }
+  @keyframes slideIn{from{opacity:0; transform:translateY(-4px);} to{opacity:1; transform:translateY(0);}}
+  .flow-row .pred{padding:2px 8px; border-radius:12px; font-size:11px; text-align:center;}
+  .flow-row .pred.benign{background:var(--signal-dim); color:var(--signal);}
+  .flow-row .pred.attack{background:var(--alert-dim); color:var(--alert);}
+  .flow-row .conf{color:var(--text-faint);}
+  .empty-state{color:var(--text-faint); font-size:13px; padding:30px 0; text-align:center;}
+
+  footer{text-align:center; padding:30px; color:var(--text-faint); font-size:11px; font-family:var(--mono);}
+
+  ::-webkit-scrollbar{width:8px; height:8px;}
+  ::-webkit-scrollbar-thumb{background:#2a3444; border-radius:4px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+
+  @media(max-width:900px){
+    .approach-grid{grid-template-columns:1fr;}
+    .grid-2{grid-template-columns:1fr;}
+    .summary-cards{grid-template-columns:1fr;}
+    .flow-row{grid-template-columns:70px 55px 1fr 70px;}
+    .flow-row .conf{display:none;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-mark">Fl</div>
+    <div>
+      <div class="brand-name">Flowline</div>
+      <div class="brand-sub">Time-based flow classification</div>
+    </div>
+  </div>
+  <div class="status-pill"><span class="dot" id="connDot"></span><span id="connText">disconnected</span></div>
+</header>
+
+<main>
+  <div class="eyebrow">Detection &amp; classification of multi-type network attacks</div>
+  <h1>Traffic flow console</h1>
+  <p class="lead">Three classifiers trained on time-based flow features (inter-arrival time, packet rate, duration, burst pattern) — pick an approach, then classify a batch of flows or watch live traffic come in.</p>
+
+  <div class="approach-grid" id="approachGrid"></div>
+
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Per-class performance</h2>
+        <span class="eyebrow" id="selectedApproachLabel" style="margin:0;"></span>
+      </div>
+      <div id="perClassTableWrap">
+        <div class="empty-state">Load metrics to see per-class precision, recall and F1.</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Aggregate metrics</h2></div>
+      <canvas id="aggChart" height="220"></canvas>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px;">
+    <div class="panel-head"><h2>Batch classification</h2></div>
+    <div class="grid-2" style="grid-template-columns:1fr 1.4fr;">
+      <div>
+        <label class="dropzone" id="dropzone">
+          <input type="file" id="fileInput" accept=".csv">
+          <div id="dropzoneLabel">Drop a flow-feature CSV here, or click to browse<br><span style="color:var(--text-faint); font-size:11px;">78 CIC-IDS-2018-shaped columns, optional Label column</span></div>
+        </label>
+        <div style="margin-top:12px; display:flex; gap:8px;">
+          <button class="btn" id="classifyBtn" disabled>Classify file</button>
+          <button class="btn secondary" id="clearBtn">Clear</button>
+        </div>
+      </div>
+      <div>
+        <div class="summary-cards" id="summaryCards">
+          <div class="summary-card"><div class="num">—</div><div class="label">Total flows</div></div>
+          <div class="summary-card benign"><div class="num">—</div><div class="label">Benign</div></div>
+          <div class="summary-card attack"><div class="num">—</div><div class="label">Attack</div></div>
+        </div>
+        <canvas id="distChart" height="180"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>Live monitor</h2></div>
+    <div class="live-controls">
+      <select id="ifaceSelect">
+        <option value="any">interface: any</option>
+        <option value="eth0">eth0</option>
+        <option value="wlan0">wlan0</option>
+        <option value="lo">lo (loopback)</option>
+      </select>
+      <button class="btn" id="startLiveBtn">Start capture</button>
+      <button class="btn danger" id="stopLiveBtn" disabled>Stop capture</button>
+      <span class="eyebrow" style="margin:0;">requires root/CAP_NET_RAW — falls back to simulated flows otherwise</span>
+    </div>
+    <div class="flow-log" id="flowLog">
+      <div class="empty-state">Start capture to see classified flows stream in.</div>
+    </div>
+  </div>
+</main>
+
+<footer>Flowline — built on CIC-IDS-2018-shaped flow features · Basic RF / Tuned RF / Stacking+PCA</footer>
+
+<script>
+const CLASS_COLORS = {
+  BENIGN: '#35d9a0'
+};
+function colorFor(label){
+  if(label === 'BENIGN') return '#35d9a0';
+  const palette = ['#ff6b5e','#ffb84d','#ff8a3d','#e05a9c','#c96bff','#3d8bff','#5ee0e0','#e0c85e'];
+  let hash = 0;
+  for(const c of label) hash = (hash*31 + c.charCodeAt(0)) % palette.length;
+  return palette[hash];
+}
+
+let selectedApproach = "1";
+let modelInfo = null;
+let aggChart, distChart;
+
+async function fetchModelInfo(){
+  const res = await fetch('/api/model-info');
+  modelInfo = await res.json();
+  renderApproachCards();
+  renderPerClassTable();
+  renderAggChart();
+}
+
+function renderApproachCards(){
+  const grid = document.getElementById('approachGrid');
+  grid.innerHTML = '';
+  modelInfo.approaches.forEach(a => {
+    const m = a.metrics;
+    const card = document.createElement('div');
+    card.className = 'approach-card' + (a.id === selectedApproach ? ' selected' : '');
+    card.onclick = () => { selectedApproach = a.id; renderApproachCards(); renderPerClassTable(); renderAggChart(); };
+    const name = m ? m.approach_name : `Approach ${a.id}`;
+    const desc = m ? m.description : 'Not yet trained — run train_model.py';
+    card.innerHTML = `
+      <span class="badge">${a.badge}</span>
+      <h3>${name}</h3>
+      <div class="desc">${desc}</div>
+      <div class="stat-row">
+        <div><span>${m ? m.accuracy + '%' : '—'}</span><small>Accuracy</small></div>
+        <div><span>${m ? m.macro_f1 + '%' : '—'}</span><small>Macro F1</small></div>
+        <div><span>${m ? m.training_time_seconds + 's' : '—'}</span><small>Train time</small></div>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+  document.getElementById('selectedApproachLabel').textContent =
+    (modelInfo.approaches.find(a=>a.id===selectedApproach)?.metrics?.approach_name) || '';
+}
+
+function barClass(v){
+  if(v >= 85) return '';
+  if(v >= 60) return 'mid';
+  return 'low';
+}
+
+function renderPerClassTable(){
+  const wrap = document.getElementById('perClassTableWrap');
+  const approach = modelInfo.approaches.find(a => a.id === selectedApproach);
+  if(!approach || !approach.metrics){
+    wrap.innerHTML = '<div class="empty-state">No metrics available for this approach yet.</div>';
+    return;
+  }
+  const perClass = approach.metrics.per_class;
+  let rows = '';
+  for(const [cls, vals] of Object.entries(perClass)){
+    rows += `<tr>
+      <td>${cls}</td>
+      <td><span class="bar-track"><span class="bar-fill ${barClass(vals.precision)}" style="width:${vals.precision}%"></span></span>${vals.precision}%</td>
+      <td><span class="bar-track"><span class="bar-fill ${barClass(vals.recall)}" style="width:${vals.recall}%"></span></span>${vals.recall}%</td>
+      <td><span class="bar-track"><span class="bar-fill ${barClass(vals.f1)}" style="width:${vals.f1}%"></span></span>${vals.f1}%</td>
+      <td>${vals.support}</td>
+    </tr>`;
+  }
+  wrap.innerHTML = `<table class="perclass">
+    <thead><tr><th>Class</th><th>Precision</th><th>Recall</th><th>F1</th><th>Support</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function renderAggChart(){
+  const ctx = document.getElementById('aggChart');
+  const labels = modelInfo.approaches.map(a => a.metrics ? a.metrics.approach_name : `Approach ${a.id}`);
+  const acc = modelInfo.approaches.map(a => a.metrics ? a.metrics.accuracy : 0);
+  const f1 = modelInfo.approaches.map(a => a.metrics ? a.metrics.macro_f1 : 0);
+  const prec = modelInfo.approaches.map(a => a.metrics ? a.metrics.macro_precision : 0);
+  if(aggChart) aggChart.destroy();
+  aggChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {label:'Accuracy', data: acc, backgroundColor:'#35d9a0'},
+        {label:'Macro Precision', data: prec, backgroundColor:'#3d8bff'},
+        {label:'Macro F1', data: f1, backgroundColor:'#ffb84d'},
+      ]
+    },
+    options: {
+      responsive:true,
+      plugins:{legend:{labels:{color:'#8994a6', font:{family:'IBM Plex Mono', size:10}}}},
+      scales:{
+        x:{ticks:{color:'#8994a6', font:{size:10}}, grid:{color:'#1e2530'}},
+        y:{ticks:{color:'#8994a6', font:{size:10}}, grid:{color:'#1e2530'}, min:0, max:100}
+      }
+    }
+  });
+}
+
+// ---------- Batch classification ----------
+let selectedFile = null;
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const classifyBtn = document.getElementById('classifyBtn');
+
+fileInput.addEventListener('change', e => {
+  selectedFile = e.target.files[0];
+  if(selectedFile){
+    document.getElementById('dropzoneLabel').innerHTML = `Selected: <strong>${selectedFile.name}</strong>`;
+    classifyBtn.disabled = false;
+  }
+});
+document.getElementById('clearBtn').onclick = () => {
+  selectedFile = null; fileInput.value = '';
+  document.getElementById('dropzoneLabel').innerHTML = 'Drop a flow-feature CSV here, or click to browse<br><span style="color:var(--text-faint); font-size:11px;">78 CIC-IDS-2018-shaped columns, optional Label column</span>';
+  classifyBtn.disabled = true;
+};
+
+classifyBtn.onclick = async () => {
+  if(!selectedFile) return;
+  classifyBtn.disabled = true;
+  classifyBtn.textContent = 'Classifying…';
+  const form = new FormData();
+  form.append('file', selectedFile);
+  try{
+    const res = await fetch(`/api/predict?approach=${selectedApproach}`, {method:'POST', body: form});
+    const data = await res.json();
+    if(data.error){ alert(data.error); return; }
+    renderSummary(data);
+  }catch(err){
+    alert('Prediction failed: ' + err.message);
+  } finally {
+    classifyBtn.disabled = false;
+    classifyBtn.textContent = 'Classify file';
+  }
+};
+
+function renderSummary(data){
+  const cards = document.getElementById('summaryCards');
+  cards.innerHTML = `
+    <div class="summary-card"><div class="num">${data.summary.total}</div><div class="label">Total flows</div></div>
+    <div class="summary-card benign"><div class="num">${data.summary.benign_pct}%</div><div class="label">Benign (${data.summary.benign})</div></div>
+    <div class="summary-card attack"><div class="num">${data.summary.attack_pct}%</div><div class="label">Attack (${data.summary.attack})</div></div>
+  `;
+  const ctx = document.getElementById('distChart');
+  const labels = Object.keys(data.class_distribution);
+  const values = Object.values(data.class_distribution);
+  if(distChart) distChart.destroy();
+  distChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{data: values, backgroundColor: labels.map(colorFor), borderColor:'#171d27', borderWidth:2}]
+    },
+    options: {
+      plugins:{legend:{position:'right', labels:{color:'#8994a6', font:{family:'IBM Plex Mono', size:10}, boxWidth:10}}}
+    }
+  });
+}
+
+// ---------- Live capture (SSE) ----------
+const flowLog = document.getElementById('flowLog');
+const startBtn = document.getElementById('startLiveBtn');
+const stopBtn = document.getElementById('stopLiveBtn');
+const connDot = document.getElementById('connDot');
+const connText = document.getElementById('connText');
+let evtSource = null;
+let flowCount = 0;
+
+function connectSSE(){
+  if(evtSource) return;
+  evtSource = new EventSource('/sse');
+  evtSource.onopen = () => { connDot.classList.add('live'); connText.textContent = 'connected'; };
+  evtSource.onerror = () => { connDot.classList.remove('live'); connText.textContent = 'disconnected'; };
+  evtSource.onmessage = e => {
+    const event = JSON.parse(e.data);
+    if(event.type === 'flow') addFlowRow(event);
+  };
+}
+
+function addFlowRow(event){
+  if(flowCount === 0) flowLog.innerHTML = '';
+  flowCount++;
+  const isBenign = event.predicted === 'BENIGN';
+  const row = document.createElement('div');
+  row.className = 'flow-row';
+  const time = new Date((event.timestamp||Date.now()/1000) * 1000).toLocaleTimeString();
+  row.innerHTML = `
+    <span>${time}</span>
+    <span>:${event.dst_port ?? '—'}</span>
+    <span class="pred ${isBenign ? 'benign' : 'attack'}">${event.predicted ?? '—'}</span>
+    <span class="conf">${event.confidence != null ? (event.confidence*100).toFixed(1)+'%' : '—'}</span>
+  `;
+  flowLog.prepend(row);
+  while(flowLog.children.length > 200) flowLog.removeChild(flowLog.lastChild);
+}
+
+startBtn.onclick = async () => {
+  connectSSE();
+  startBtn.disabled = true;
+  stopBtn.disabled = false;
+  await fetch('/api/live/start', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({interface: document.getElementById('ifaceSelect').value, approach: selectedApproach})
+  });
+};
+stopBtn.onclick = async () => {
+  await fetch('/api/live/stop', {method:'POST'});
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
+};
+
+fetchModelInfo();
+</script>
+</body>
+</html>
