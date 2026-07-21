@@ -1,13 +1,13 @@
  Detection and Classification of Multi-Type Network Attacks Using Time-Based Features
 
 An end-to-end network intrusion detection system built around three
-complementary classifiers trained on **time-based flow features** (inter-arrival
+complementary classifiers trained on time-based flow features (inter-arrival
 time statistics, packet rate, flow duration, burst patterns). Implements the
 methodology from the accompanying dissertation:
 
-1 — Basic Random Forest**: 100-estimator RF, default hyperparameters, full 78-feature set.
-2 — Tuned Random Forest**: 200-estimator RF with regularization (`max_depth=20`, `min_samples_split=5`, `min_samples_leaf=2`).
-3 — Stacking Ensemble + PCA**: RF + KNN(k=3) + Calibrated LinearSVC → Logistic Regression meta-learner, over a 10-component PCA-reduced feature space.
+1 — Basic Random Forest: 100-estimator RF, default hyperparameters, full 78-feature set.
+2 — Tuned Random Forest: 200-estimator RF with regularization (max_depth=20, min_samples_split=5, min_samples_leaf=2).
+3 — Stacking Ensemble + PCA: RF + KNN(k=3) + Calibrated LinearSVC → Logistic Regression meta-learner, over a 10-component PCA-reduced feature space.
 
 
 Project layout
@@ -32,16 +32,16 @@ Data
 This project targets the **CIC-IDS-2018** dataset (78 flow-level features per
 record, 15 traffic classes: BENIGN + 14 attack families). Two ways to get data:
 
-1. *Use the real dataset.** Download the CSVs from the Canadian Institute for
+1. Use the real dataset. Download the CSVs from the Canadian Institute for
    Cybersecurity (search "CSE-CIC-IDS2018"), merge them into a single CSV with
-   a `Label` column, and drop it into `data/`.
-2. Use the bundled synthetic generator** to try the whole pipeline immediately
+   a Label column, and drop it into data.
+2. Use the bundled synthetic generator to try the whole pipeline immediately
    without any download:
 
    This creates a dataset with the same 78 columns and 15 class labels, with
    per-class feature distributions shaped to loosely mimic the behavioral
-   patterns described in the dissertation (e.g. DDoS = very high `Flow Byts/s`,
-   slow-HTTP = very long `Flow Duration`, web attacks = tiny packets on port 80).
+   patterns described in the dissertation (e.g. DDoS = very high Flow Byts,
+   slow-HTTP = very long Flow Duration, web attacks = tiny packets on port 80).
    It's for exercising the pipeline end-to-end, not for reproducing the
    dissertation's exact reported numbers — for that you need the real dataset.
 
